@@ -16,3 +16,4 @@ api.add_namespace(users_ns, path='/api/v1/users')
 
 if __name__ == '__main__':
     app.run(debug=True)
+
