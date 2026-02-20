@@ -1,134 +1,123 @@
 from flask_restx import Namespace, Resource, fields
-from services import facade
+from app.services import facade
 
 api = Namespace('places', description='Place operations')
 
-amenity_model = api.model('PlaceAmenity', {
-    'id': fields.String,
-    'name': fields.String
+# ---------- Models ----------
+amenity_mini = api.model('AmenityMini', {
+    'id':   fields.String(description='Amenity ID'),
+    'name': fields.String(description='Amenity name'),
 })
 
-user_model = api.model('PlaceUser', {
-    'id': fields.String,
-    'first_name': fields.String,
-    'last_name': fields.String,
-    'email': fields.String
+owner_mini = api.model('OwnerMini', {
+    'id':         fields.String(description='Owner ID'),
+    'first_name': fields.String(description='First name'),
+    'last_name':  fields.String(description='Last name'),
+    'email':      fields.String(description='Email'),
 })
 
 place_model = api.model('Place', {
-    'title': fields.String(required=True),
-    'description': fields.String,
-    'price': fields.Float(required=True),
-    'latitude': fields.Float(required=True),
-    'longitude': fields.Float(required=True),
-    'owner_id': fields.String(required=True),
-    'amenities': fields.List(fields.String)
+    'title':       fields.String(required=True, description='Place title'),
+    'description': fields.String(description='Place description'),
+    'price':       fields.Float(required=True, description='Price per night'),
+    'latitude':    fields.Float(required=True, description='Latitude (-90 to 90)'),
+    'longitude':   fields.Float(required=True, description='Longitude (-180 to 180)'),
+    'owner_id':    fields.String(required=True, description='Owner user ID'),
+    'amenities':   fields.List(fields.String, description='List of amenity IDs'),
+})
+
+place_response = api.model('PlaceResponse', {
+    'id':          fields.String(description='Place ID'),
+    'title':       fields.String(description='Place title'),
+    'description': fields.String(description='Description'),
+    'price':       fields.Float(description='Price per night'),
+    'latitude':    fields.Float(description='Latitude'),
+    'longitude':   fields.Float(description='Longitude'),
+    'owner_id':    fields.String(description='Owner ID'),
+    'owner':       fields.Nested(owner_mini, description='Owner details'),
+    'amenities':   fields.List(fields.Nested(amenity_mini)),
+    'created_at':  fields.String(description='Creation timestamp'),
+    'updated_at':  fields.String(description='Update timestamp'),
 })
 
 
+# ---------- Helper ----------
+def place_to_dict(place):
+    """Serialize a place with owner details and amenities."""
+    data = place.to_dict()
+    owner = facade.get_user(place.owner_id)
+    data['owner'] = {
+        'id': owner.id,
+        'first_name': owner.first_name,
+        'last_name': owner.last_name,
+        'email': owner.email,
+    } if owner else None
+    data['amenities'] = [{'id': a.id, 'name': a.name} for a in place.amenities]
+    return data
+
+
+# ---------- Endpoints ----------
 @api.route('/')
 class PlaceList(Resource):
 
-    @api.expect(place_model, validate=True)
-    def post(self):
-        place_data = api.payload
-
-        owner = facade.get_user(place_data['owner_id'])
-        if not owner:
-            return {'error': 'Owner not found'}, 400
-
-        if 'amenities' in place_data:
-            for amenity_id in place_data['amenities']:
-                if not facade.get_amenity(amenity_id):
-                    return {'error': f'Amenity {amenity_id} not found'}, 400
-
-        new_place = facade.create_place(place_data)
-
-        return {
-            'id': new_place.id,
-            'title': new_place.title,
-            'description': new_place.description,
-            'price': new_place.price,
-            'latitude': new_place.latitude,
-            'longitude': new_place.longitude,
-            'owner_id': new_place.owner_id,
-            'amenities': new_place.amenities
-        }, 201
-
-
+    @api.response(200, 'List of places retrieved successfully')
     def get(self):
-        places = facade.get_all_places()
-        return [{
-            'id': p.id,
-            'title': p.title,
-            'latitude': p.latitude,
-            'longitude': p.longitude
-        } for p in places], 200
+        """Retrieve all places."""
+        return [place_to_dict(p) for p in facade.get_all_places()], 200
+
+    @api.expect(place_model, validate=True)
+    @api.response(201, 'Place created successfully')
+    @api.response(400, 'Invalid input data')
+    def post(self):
+        """Create a new place."""
+        data = api.payload
+        if not data.get('title', '').strip():
+            return {'error': 'title is required'}, 400
+        try:
+            place = facade.create_place(data)
+            return place_to_dict(place), 201
+        except ValueError as e:
+            return {'error': str(e)}, 400
 
 
 @api.route('/<string:place_id>')
 class PlaceResource(Resource):
 
+    @api.response(200, 'Place details retrieved successfully')
+    @api.response(404, 'Place not found')
     def get(self, place_id):
+        """Get a place by ID (includes owner details and amenities)."""
         place = facade.get_place(place_id)
         if not place:
             return {'error': 'Place not found'}, 404
+        return place_to_dict(place), 200
 
-        owner = facade.get_user(place.owner_id)
-        if not owner:
-            return {'error': 'Owner not found'}, 400
-
-        amenities = []
-        for amenity_id in place.amenities:
-            amenity = facade.get_amenity(amenity_id)
-            if amenity:
-                amenities.append({
-                    'id': amenity.id,
-                    'name': amenity.name
-                })
-
-        return {
-            'id': place.id,
-            'title': place.title,
-            'description': place.description,
-            'price': place.price,
-            'latitude': place.latitude,
-            'longitude': place.longitude,
-            'owner': {
-                'id': owner.id,
-                'first_name': owner.first_name,
-                'last_name': owner.last_name,
-                'email': owner.email
-            },
-            'amenities': amenities
-        }, 200
-
-
-    @api.expect(place_model, validate=True)
+    @api.expect(place_model, validate=False)
+    @api.response(200, 'Place updated successfully')
+    @api.response(400, 'Invalid input data')
+    @api.response(404, 'Place not found')
     def put(self, place_id):
-        place_data = api.payload
+        """Update a place."""
+        data = api.payload
+        if not data:
+            return {'error': 'No data provided'}, 400
+        try:
+            place = facade.update_place(place_id, data)
+            if not place:
+                return {'error': 'Place not found'}, 404
+            return place_to_dict(place), 200
+        except ValueError as e:
+            return {'error': str(e)}, 400
 
-        if 'owner_id' in place_data:
-            if not facade.get_user(place_data['owner_id']):
-                return {'error': 'Owner not found'}, 400
 
-        if 'amenities' in place_data:
-            for amenity_id in place_data['amenities']:
-                if not facade.get_amenity(amenity_id):
-                    return {'error': f'Amenity {amenity_id} not found'}, 400
+@api.route('/<string:place_id>/reviews')
+class PlaceReviews(Resource):
 
-        updated_place = facade.update_place(place_id, place_data)
-        if not updated_place:
+    @api.response(200, 'Reviews retrieved successfully')
+    @api.response(404, 'Place not found')
+    def get(self, place_id):
+        """Get all reviews for a specific place."""
+        if not facade.get_place(place_id):
             return {'error': 'Place not found'}, 404
-
-        return {
-            'id': updated_place.id,
-            'title': updated_place.title,
-            'description': updated_place.description,
-            'price': updated_place.price,
-            'latitude': updated_place.latitude,
-            'longitude': updated_place.longitude,
-            'owner_id': updated_place.owner_id,
-            'amenities': updated_place.amenities
-        }, 200
-
+        reviews = facade.get_reviews_by_place(place_id)
+        return [r.to_dict() for r in reviews], 200
