@@ -1,68 +1,84 @@
-from flask_restx import Namespace, Resource, fields
-from app.services import facade
+"""Module for amenities endpoint"""
+from uuid import uuid4
 
-api = Namespace('amenities', description='Amenity operations')
+from flask import Blueprint, jsonify, request
+from flask_jwt_extended import jwt_required
 
-# ---------- Models ----------
-amenity_model = api.model('Amenity', {
-    'name': fields.String(required=True, description='Amenity name'),
-})
+from model.amenity import Amenity
 
-amenity_response = api.model('AmenityResponse', {
-    'id':         fields.String(description='Amenity ID'),
-    'name':       fields.String(description='Amenity name'),
-    'created_at': fields.String(description='Creation timestamp'),
-    'updated_at': fields.String(description='Update timestamp'),
-})
+from services.DataManipulation.crud import Crud
+from services.DataManipulation.datamanager import DataManager
 
 
-# ---------- Endpoints ----------
-@api.route('/')
-class AmenityList(Resource):
-
-    @api.response(200, 'List of amenities retrieved successfully')
-    def get(self):
-        """Retrieve all amenities."""
-        return [a.to_dict() for a in facade.get_all_amenities()], 200
-
-    @api.expect(amenity_model, validate=True)
-    @api.response(201, 'Amenity created successfully')
-    @api.response(400, 'Invalid input data')
-    def post(self):
-        """Create a new amenity."""
-        data = api.payload
-        try:
-            amenity = facade.create_amenity(data)
-            return amenity.to_dict(), 201
-        except ValueError as e:
-            return {'error': str(e)}, 400
+amenities_bp = Blueprint('amenities', __name__)
 
 
-@api.route('/<string:amenity_id>')
-class AmenityResource(Resource):
+@amenities_bp.get('/')
+def get_amenities():
+    raw_data = Crud.get('Amenity')
+    data_dict = dict()
+    for data in raw_data:
+        data_dict.update(DataManager.custom_encoder(data))
+    if not data_dict:
+        return jsonify({'message': 'No amenities found'}), 200
+    return jsonify(data_dict), 200
 
-    @api.response(200, 'Amenity details retrieved successfully')
-    @api.response(404, 'Amenity not found')
-    def get(self, amenity_id):
-        """Get an amenity by ID."""
-        amenity = facade.get_amenity(amenity_id)
-        if not amenity:
-            return {'error': 'Amenity not found'}, 404
-        return amenity.to_dict(), 200
 
-    @api.expect(amenity_model, validate=False)
-    @api.response(200, 'Amenity updated successfully')
-    @api.response(400, 'Invalid input data')
-    @api.response(404, 'Amenity not found')
-    def put(self, amenity_id):
-        """Update an amenity."""
-        data = api.payload
-        if not data:
-            return {'error': 'No data provided'}, 400
-        try:
-            amenity = facade.update_amenity(amenity_id, data)
-            if not amenity:
-                return {'error': 'Amenity not found'}, 404
-            return amenity.to_dict(), 200
-        except ValueError as e:
-            return {'error': str(e)}, 400
+@amenities_bp.get('/<amenity_id>')
+def get_amenity_by_id(amenity_id):
+    raw_data = Crud.get('Amenity', amenity_id)
+    if not raw_data:
+        return jsonify({'error': 'Amenity not found'}), 404
+    rd_data = DataManager.custom_encoder(raw_data)
+    data_dict = dict()
+    data_dict.update(rd_data)
+    return jsonify(data_dict), 200
+
+
+@amenities_bp.post('/')
+@jwt_required()
+def create_amenity():
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data'}), 400
+    name = data.get('name')
+    if not name:
+        return jsonify({'error': 'Amenity name is required'}), 400
+    try:
+        new_amenity_id = str(uuid4())
+        amenity = Amenity(id=new_amenity_id, name=name)
+        DataManager.save_to_db(amenity)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+    amenity = Crud.get('Amenity', new_amenity_id)
+    return jsonify(DataManager.custom_encoder(amenity)), 201
+
+
+@amenities_bp.put('/<amenity_id>')
+@jwt_required()
+def update_amenity(amenity_id):
+    datatoupdate = request.get_json()
+    if not datatoupdate:
+        return jsonify({'error': 'No data'}), 400
+    data = Crud.get('Amenity', amenity_id)
+    if data is None:
+        return jsonify({'error': 'Amenity not found'}), 404
+    name = datatoupdate.get('name')
+    if not name:
+        return jsonify({'error': 'Amenity name is required'}), 400
+    try:
+        Crud.update('Amenity', amenity_id, 'name', name)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify({'message': 'Amenity updated'}), 201
+
+
+@amenities_bp.delete('/<amenity_id>')
+@jwt_required()
+def delete_amenity(amenity_id):
+    if not amenity_id:
+        return jsonify({'error': 'Missing data'}), 400
+    status = Crud.delete('Amenity', amenity_id)
+    if status == 404:
+        return jsonify({'error': 'Amenity not found'}), 404
+    return jsonify({'message': 'Amenity deleted'}), 204

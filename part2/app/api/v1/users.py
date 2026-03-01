@@ -1,79 +1,93 @@
-from flask_restx import Namespace, Resource, fields
-from app.services import facade
+"""Module for user endpoint"""
+from flask import Blueprint, jsonify, request
+from flask_jwt_extended import jwt_required
 
-api = Namespace('users', description='User operations')
+from model.review import Review
 
-# ---------- Models ----------
-user_model = api.model('User', {
-    'first_name': fields.String(required=True, description='First name'),
-    'last_name':  fields.String(required=True, description='Last name'),
-    'email':      fields.String(required=True, description='Email address'),
-    'password':   fields.String(required=True, description='Password'),
-})
-
-user_response = api.model('UserResponse', {
-    'id':         fields.String(description='User ID'),
-    'first_name': fields.String(description='First name'),
-    'last_name':  fields.String(description='Last name'),
-    'email':      fields.String(description='Email address'),
-    'created_at': fields.String(description='Creation timestamp'),
-    'updated_at': fields.String(description='Update timestamp'),
-})
+from services.Database.database import get_session
+from services.DataManipulation.crud import Crud
+from services.DataManipulation.datamanager import DataManager
 
 
-# ---------- Endpoints ----------
-@api.route('/')
-class UserList(Resource):
-
-    @api.response(200, 'List of users retrieved successfully')
-    def get(self):
-        """Retrieve all users."""
-        users = facade.get_all_users()
-        return [u.to_dict() for u in users], 200
-
-    @api.expect(user_model, validate=True)
-    @api.response(201, 'User created successfully')
-    @api.response(400, 'Email already registered or invalid data')
-    def post(self):
-        """Register a new user."""
-        data = api.payload
-
-        for field in ('first_name', 'last_name', 'email', 'password'):
-            if not data.get(field, '').strip():
-                return {'error': f'{field} is required'}, 400
-
-        try:
-            user = facade.create_user(data)
-            return user.to_dict(), 201
-        except ValueError as e:
-            return {'error': str(e)}, 400
+users_bp = Blueprint('users', __name__)
 
 
-@api.route('/<string:user_id>')
-class UserResource(Resource):
+@users_bp.get('/')
+def get_users():
+    raw_data = Crud.get('User')
+    data_dict = dict()
+    for data in raw_data:
+        rd_data = DataManager.custom_encoder(data)
+        for key, value in rd_data.items():
+            value.pop('role')
+            value.pop('password')
+        data_dict.update(rd_data)
+    if not data_dict:
+        return jsonify({'message': 'No users found'}), 200
+    return jsonify(data_dict), 200
 
-    @api.response(200, 'User details retrieved successfully')
-    @api.response(404, 'User not found')
-    def get(self, user_id):
-        """Get a user by ID."""
-        user = facade.get_user(user_id)
-        if not user:
-            return {'error': 'User not found'}, 404
-        return user.to_dict(), 200
 
-    @api.expect(user_model, validate=False)
-    @api.response(200, 'User updated successfully')
-    @api.response(400, 'Invalid data')
-    @api.response(404, 'User not found')
-    def put(self, user_id):
-        """Update a user."""
-        data = api.payload
-        if not data:
-            return {'error': 'No data provided'}, 400
-        try:
-            user = facade.update_user(user_id, data)
-            if not user:
-                return {'error': 'User not found'}, 404
-            return user.to_dict(), 200
-        except ValueError as e:
-            return {'error': str(e)}, 400
+@users_bp.get('/<user_id>')
+def get_user_by_id(user_id):
+    raw_data = Crud.get('User', user_id)
+    if raw_data is None:
+        return jsonify({'error': 'User not found'}), 404
+    rd_data = DataManager.custom_encoder(raw_data)
+    for key, value in rd_data.items():
+        value.pop('role')
+        value.pop('password')
+    data_dict = dict()
+    data_dict.update(rd_data)
+    return jsonify(data_dict), 200
+
+
+@users_bp.put('/<user_id>')
+@jwt_required()
+def update_user(user_id):
+    datatoupdate = request.get_json()
+    if not datatoupdate:
+        return jsonify({'error': 'No data'}), 400
+    data = Crud.get('User', user_id)
+    if data is None:
+        return jsonify({'error': 'User not found'}), 404
+    fields_to_update = ['email', 'password', 'first_name', 'last_name']
+    for field in fields_to_update:
+        if datatoupdate.get(field):
+            try:
+                status = Crud.update('User', user_id, field, datatoupdate[field])
+                if status == 404:
+                    return jsonify({'error': 'User not found'}), 404
+            except Exception as e:
+                return jsonify({'error': str(e)}), 400
+    return jsonify({'message': 'User updated'}), 201
+
+
+@users_bp.delete('/<user_id>')
+@jwt_required()
+def delete_user(user_id):
+    if not user_id:
+        return jsonify({'error': 'Missing data'}), 400
+    status = Crud.delete('User', user_id)
+    if status == 404:
+        return jsonify({'error': 'User not found'}), 404
+    return jsonify({'message': 'User deleted'}), 204
+
+
+@users_bp.get('/<user_id>/reviews')
+def get_reviews(user_id):
+    if not user_id:
+        return jsonify({'error': 'Missing data'}), 400
+    session = get_session()
+    try:
+        reviews = session.query(Review).filter(Review.user == user_id).all()
+        data_dict = dict()
+        for data in reviews:
+            rd_data = DataManager.custom_encoder(data)
+            data_dict.update(rd_data)
+        if not data_dict:
+            return jsonify({'message': 'No users found'}), 404
+        return jsonify(data_dict), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 200
+    finally:
+        session.close()

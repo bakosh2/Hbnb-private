@@ -1,53 +1,103 @@
-import re
-from app.models import BaseModel
+"""Module for User class"""
+from datetime import datetime
+from uuid import uuid4
 
-EMAIL_REGEX = re.compile(r"[^@]+@[^@]+\.[^@]+")
+from sqlalchemy import Column, String, Boolean, DateTime, CheckConstraint
+from sqlalchemy.orm import validates
+
+from werkzeug.security import generate_password_hash
+
+from model.review import Review
+from services.Database.database import Base, get_session
+from services.Validators.validators import Validator
 
 
-class User(BaseModel):
-    def __init__(self, first_name, last_name, email, is_admin=False):
-        super().__init__()
-        self.first_name = first_name
-        self.last_name = last_name
-        self.email = email
-        self.is_admin = is_admin
+class User(Base):
+    """The User Class"""
+    __tablename__ = 'users'
 
-    @property
-    def first_name(self):
-        return self._first_name
+    id = Column(String(36), primary_key=True, default=lambda: uuid4())
+    email = Column(String(255), unique=True, nullable=False)
+    password = Column(String(255), nullable=False)
+    first_name = Column(String(255), nullable=False)
+    last_name = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow(), nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow(), onupdate=datetime.utcnow(), nullable=False)
+    role = Column(String(5), default='user', nullable=False)
+    is_verified = Column(Boolean, default=False, nullable=False)
 
-    @first_name.setter
-    def first_name(self, value):
-        if not value or len(value) > 50:
-            raise ValueError(
-                "first_name is required and must be <= 50 characters")
-        self._first_name = value
+    __table_args__ = (
+        CheckConstraint(role.in_(['user', 'admin', 'owner']), name='role_check'),
+    )
 
-    @property
-    def last_name(self):
-        return self._last_name
+    @validates('email')
+    def validate_email(self, key, value):
+        validated_email = value.lower()
+        mailcheck, status = Validator.validate_user_mail(validated_email)
+        if not mailcheck:
+            if status == 1:
+                raise ValueError("Email format is not correct")
+            elif status == 0:
+                raise ValueError("User with this email already exists")
+        return validated_email
 
-    @last_name.setter
-    def last_name(self, value):
-        if not value or len(value) > 50:
-            raise ValueError(
-                "last_name is required and must be <= 50 characters")
-        self._last_name = value
+    @validates('password')
+    def validate_password(self, key, value):
+        import re
 
-    @property
-    def email(self):
-        return self._email
+        # Check if password is minimum 8 characters
+        if len(value) < 8:
+            raise ValueError("Password must be at least 8 characters")
 
-    @email.setter
-    def email(self, value):
-        if not value or not EMAIL_REGEX.match(value):
-            raise ValueError("Invalid email format")
-        self._email = value
+        # Check if password contains at least one uppercase letter
+        elif not re.search('[A-Z]', value):
+            raise ValueError("Password must contain at least one uppercase letter")
 
-    @property
-    def is_admin(self):
-        return self._is_admin
+        # Check if password contains at least one lowercase letter
+        elif not re.search('[a-z]', value):
+            raise ValueError("Password must contain at least one lowercase letter")
 
-    @is_admin.setter
-    def is_admin(self, value):
-        self._is_admin = bool(value)
+        # Check if password contains at least one number
+        elif not re.search('[0-9]', value):
+            raise ValueError("Password must contain at least one number")
+
+        # Hash using sha256
+        hashed_password = generate_password_hash(value)
+        return hashed_password
+
+    @validates('first_name')
+    def validate_first_name(self, key, value):
+        validated_first_name = ' '.join(word.capitalize() for word in value.split())
+        return validated_first_name
+
+    @validates('last_name')
+    def validate_last_name(self, key, value):
+        validated_last_name = ' '.join(word.capitalize() for word in value.split())
+        return validated_last_name
+
+    @staticmethod
+    def delete(deletionid: str):
+        """Function for delete a user object"""
+        from model.place import Place
+
+        session = get_session()
+        try:
+            usertodelete = session.query(User).filter(User.id == deletionid).one()
+            if not usertodelete:
+                raise ValueError("User does not exist")
+            places = session.query(Place).filter(Place.host == deletionid).all()
+            for place in places:
+                Place.delete(place.id)
+                session.commit()
+            reviews = session.query(Review).filter(Review.user == deletionid).all()
+            for review in reviews:
+                Review.delete(review.id)
+                session.commit()
+            session.delete(usertodelete)
+            session.commit()
+            return usertodelete
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
