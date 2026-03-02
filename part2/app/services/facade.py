@@ -109,9 +109,10 @@ class HBnBFacade:
 
         for aid in place_data.get('amenities', []):
             amenity = self.amenity_repo.get(aid)
-            if amenity and amenity not in place.amenities:
+            if not amenity:
+                raise ValueError(f"Amenity '{aid}' not found")
+            if amenity not in place.amenities:
                 place.amenities.append(amenity)
-
         self.place_repo.add(place)
         return place
 
@@ -138,9 +139,9 @@ class HBnBFacade:
             place.amenities = []
             for aid in amenity_ids:
                 amenity = self.amenity_repo.get(aid)
-                if amenity:
-                    place.amenities.append(amenity)
-
+                if not amenity:
+                    raise ValueError(f"Amenity '{aid}' not found")
+                place.amenities.append(amenity)
         place.update(place_data)
         return place
 
