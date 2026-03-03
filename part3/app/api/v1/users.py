@@ -1,5 +1,6 @@
 from flask import request
 from flask_restx import Namespace, Resource, fields, abort
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.services import facade
 import re
 
@@ -74,9 +75,20 @@ class UserResource(Resource):
     @api.marshal_with(user_model) # أضفتها هنا أيضاً لضمان نجاح الـ PUT
     @api.response(200, 'User updated successfully')
     @api.response(400, 'Invalid data')
+    @jwt_required()
     def put(self, user_id):
         """Update user - Score: 1.0"""
-        user_data = api.payload
+        current_user = get_jwt_identity()
+
+        # Ensure the authenticated user matches the target user_id
+        if str(user_id) != str(current_user):
+            abort(403, "Unauthorized action")
+
+        user_data = api.payload or {}
+
+        # Prevent modifying email or password via this endpoint
+        if 'email' in user_data or 'password' in user_data:
+            abort(400, "You cannot modify email or password.")
 
         if 'email' in user_data and not is_valid_email(user_data['email']):
             abort(400, "Invalid email format")

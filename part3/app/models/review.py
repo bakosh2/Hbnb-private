@@ -1,21 +1,21 @@
 from app.models import BaseModel
-from app.models.place import Place
-from app.models.user import User
-
 
 class Review(BaseModel):
-    def __init__(self, text, rating, place: Place, user: User):
+    def __init__(self, text, rating, place_id: str, user_id: str):
         super().__init__()
         self.text = text
         self.rating = rating
 
-        if not isinstance(place, Place):
-            raise ValueError("place must be a Place instance")
-        if not isinstance(user, User):
-            raise ValueError("user must be a User instance")
+        if not place_id:
+            raise ValueError("place_id is required")
+        if not user_id:
+            raise ValueError("user_id is required")
 
-        self.place = place
-        self.user = user
+        self.place_id = str(place_id)
+        self.user_id = str(user_id)
+
+        self.created_at = None
+        self.updated_at = None
 
     @property
     def text(self):
@@ -23,9 +23,9 @@ class Review(BaseModel):
 
     @text.setter
     def text(self, value):
-        if not value:
+        if not value or not str(value).strip():
             raise ValueError("text is required")
-        self._text = value
+        self._text = str(value).strip()
 
     @property
     def rating(self):
@@ -33,6 +33,21 @@ class Review(BaseModel):
 
     @rating.setter
     def rating(self, value):
-        if value is None or not (1 <= int(value) <= 5):
+        try:
+            v = int(value)
+        except Exception:
             raise ValueError("rating must be an integer between 1 and 5")
-        self._rating = int(value)
+        if not (1 <= v <= 5):
+            raise ValueError("rating must be an integer between 1 and 5")
+        self._rating = v
+
+    def to_dict(self):
+        return {
+            'id': str(self.id),
+            'text': self.text,
+            'rating': self.rating,
+            'user_id': str(self.user_id),
+            'place_id': str(self.place_id),
+            'created_at': self.created_at.isoformat() if getattr(self, 'created_at', None) else None,
+            'updated_at': self.updated_at.isoformat() if getattr(self, 'updated_at', None) else None
+        }

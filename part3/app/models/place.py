@@ -1,10 +1,7 @@
 from app.models import BaseModel
-from app.models.user import User
-from app.models.amenity import Amenity
-
 
 class Place(BaseModel):
-    def __init__(self, title, description, price, latitude, longitude, owner: User):
+    def __init__(self, title, description, price, latitude, longitude, owner_id: str):
         super().__init__()
         self.title = title
         self.description = description
@@ -12,9 +9,9 @@ class Place(BaseModel):
         self.latitude = latitude
         self.longitude = longitude
 
-        if not isinstance(owner, User):
-            raise ValueError("owner must be a User instance")
-        self.owner = owner
+        if not owner_id:
+            raise ValueError("owner_id is required")
+        self.owner_id = str(owner_id)
 
         self.reviews = []      # list of Review instances
         self.amenities = []    # list of Amenity instances
@@ -73,7 +70,22 @@ class Place(BaseModel):
             raise ValueError("review must be a Review instance")
         self.reviews.append(review)
 
-    def add_amenity(self, amenity: Amenity):
+    def add_amenity(self, amenity):
+        from app.models.amenity import Amenity
         if not isinstance(amenity, Amenity):
             raise ValueError("amenity must be an Amenity instance")
         self.amenities.append(amenity)
+
+    def to_dict(self):
+        return {
+            'id': str(self.id),
+            'title': self.title,
+            'description': self.description,
+            'price': self.price,
+            'latitude': self.latitude,
+            'longitude': self.longitude,
+            'owner_id': str(self.owner_id),
+            'amenities': [str(a.id) for a in self.amenities],
+            'created_at': self.created_at.isoformat() if getattr(self, 'created_at', None) else None,
+            'updated_at': self.updated_at.isoformat() if getattr(self, 'updated_at', None) else None
+        }

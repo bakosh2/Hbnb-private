@@ -2,37 +2,87 @@ from app.models import BaseModel
 from app import bcrypt
 import re
 
+
 class User(BaseModel):
     def __init__(self, email, password, first_name, last_name, is_admin=False, **kwargs):
+        """
+        User model
+
+        Parameters are accepted as keywords by the facade/service layer,
+        so this constructor supports both positional and keyword usage.
+        """
         super().__init__(**kwargs)
         self.email = self.validate_email(email)
-        self.password = password  # Hash this in the facade or here
+        # store hashed password only via hash_password; allow setting raw then hashing
+        self.password = None
+        self.hash_password(password or '')
         self.first_name = first_name
         self.last_name = last_name
-        self.is_admin = is_admin
+        self.is_admin = bool(is_admin)
 
     @staticmethod
     def validate_email(email):
+        """Validate email format and return the normalized value."""
+        if not email:
+            raise ValueError("Email is required")
         email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
         if not re.match(email_regex, email):
             raise ValueError("Invalid email format")
         return email
 
     def to_dict(self):
+        """Return a JSON-serializable representation of the user (no password)."""
         return {
-            'id': self.id,
+            'id': str(self.id),
             'first_name': self.first_name,
             'last_name': self.last_name,
             'email': self.email,
-            'is_admin': self.is_admin,
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat()
+            'is_admin': bool(self.is_admin),
+            'created_at': self.created_at.isoformat() if getattr(self, 'created_at', None) else None,
+            'updated_at': self.updated_at.isoformat() if getattr(self, 'updated_at', None) else None
         }
 
     def hash_password(self, password):
-        """Hashes the password before storing it."""
-        self.password = bcrypt.generate_password_hash(password).decode('utf-8')
+        """Hash and store the password using the app's bcrypt instance."""
+        # Ensure password is a string
+        pw = '' if password is None else str(password)
+        # bcrypt.generate_password_hash returns bytes; decode to str for storage
+        self.password = bcrypt.generate_password_hash(pw).decode('utf-8')
+
+    def set_password(self, password):
+        """Public helper to change password (hashes before storing)."""
+        if not password:
+            raise ValueError("Password cannot be empty")
+        self.hash_password(password)
 
     def verify_password(self, password):
-        """Verifies if the provided password matches the hashed password."""
-        return bcrypt.check_password_hash(self.password, password)
+        """Verify a plaintext password against the stored hash."""
+        if not self.password:
+            return False
+        try:
+            return bcrypt.check_password_hash(self.password, password)
+        except Exception:
+            return False
+
+    def update(self, data):
+        """
+        Update allowed user fields in-place.
+        This method intentionally excludes password changes; use set_password for that.
+        """
+        if not isinstance(data, dict):
+            return
+
+        if 'first_name' in data:
+            self.first_name = data['first_name']
+        if 'last_name' in data:
+            self.last_name = data['last_name']
+        # Do not allow email or password updates here; higher layers enforce that.
+        if 'is_admin' in data:
+            self.is_admin = bool(data['is_admin'])
+        # update timestamps if BaseModel supports it
+        if hasattr(self, 'touch'):
+            try:
+                self.touch()
+            except Exception:
+                pass
+        return self

@@ -183,6 +183,16 @@ class HBnBFacade:
     def get_reviews_by_place(self, place_id):
         return [r for r in self.review_repo.get_all() if r.place_id == place_id]
 
+    def get_review_by_user_and_place(self, user_id, place_id):
+        """
+        Return a review created by `user_id` for `place_id`, or None if not found.
+        Used to enforce "one review per user per place" at the API/service level.
+        """
+        for r in self.review_repo.get_all():
+            if str(getattr(r, 'user_id', None)) == str(user_id) and str(getattr(r, 'place_id', None)) == str(place_id):
+                return r
+        return None
+
     def update_review(self, review_id, review_data):
         review = self.review_repo.get(review_id)
         if not review:
