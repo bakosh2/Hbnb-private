@@ -1,30 +1,30 @@
-from app.models.base_model import BaseModel
+import uuid
 import re
 
-class User(BaseModel):
-    def __init__(self, email, password, first_name, last_name, is_admin=False, **kwargs):
-        super().__init__(**kwargs)
+class User:
+    def __init__(self, first_name, last_name, email, password=None, id=None):
+        self.id = id or str(uuid.uuid4())
+        self.first_name = self.validate_string(first_name, "first_name")
+        self.last_name = self.validate_string(last_name, "last_name")
         self.email = self.validate_email(email)
-        self.password = password  # Hash this in the facade or here
-        self.first_name = first_name
-        self.last_name = last_name
-        self.is_admin = is_admin
+        self.password = password
+
+    @staticmethod
+    def validate_string(value, field_name):
+        if not value or not isinstance(value, str):
+            raise ValueError(f"{field_name} must be a non-empty string")
+        return value
 
     @staticmethod
     def validate_email(email):
-        email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+        email_regex = r'^[a-z0-9]+[\._]?[a-z0-9]+[@]\w+[.]\w+$'
         if not re.match(email_regex, email):
             raise ValueError("Invalid email format")
         return email
 
-    def to_dict(self):
-        """Mandatory for Part 2 to avoid 'MISSING' errors"""
-        return {
-            'id': self.id,
-            'first_name': self.first_name,
-            'last_name': self.last_name,
-            'email': self.email,
-            'is_admin': self.is_admin,
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat()
-        }
+    def update(self, data):
+        """Updates the user attributes based on the provided dictionary."""
+        protected_fields = ['id', 'email']
+        for key, value in data.items():
+            if key not in protected_fields and hasattr(self, key):
+                setattr(self, key, value)

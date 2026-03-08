@@ -5,16 +5,14 @@ import re
 
 api = Namespace('users', description='User operations')
 
-# تعريف الموديل لتحويل البيانات إلى JSON تلقائياً
 user_model = api.model('User', {
     'id': fields.String(readOnly=True, description='The user unique identifier'),
-    'first_name': fields.String(required=True, description='First name is required', min_length=1, max_length=50),
-    'last_name': fields.String(required=True, description='Last name is required', min_length=1, max_length=50),
-    'email': fields.String(required=True, description='Valid email is required')
+    'first_name': fields.String(required=True, description='First name', min_length=1, max_length=50),
+    'last_name': fields.String(required=True, description='Last name', min_length=1, max_length=50),
+    'email': fields.String(required=True, description='User email address')
 })
 
 def is_valid_email(email):
-    """Helper to validate email format"""
     email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
     return re.match(email_regex, email) is not None
 
@@ -23,58 +21,54 @@ class UserList(Resource):
     @api.marshal_list_with(user_model)
     @api.response(200, 'List of users retrieved successfully')
     def get(self):
-        """Retrieve all users - Score: 1.0"""
+        """List all users"""
         return facade.get_all_users(), 200
 
     @api.expect(user_model, validate=True)
-    @api.marshal_with(user_model, code=201)  # التعديل الأساسي هنا: لتحويل الكائن لـ JSON
     @api.response(201, 'User successfully created')
     @api.response(400, 'Invalid input or Email already exists')
     def post(self):
-        """Create a new user - Score: 1.0"""
+        """Create a new user"""
         user_data = api.payload
 
-        # 1. Manual Validation
         if not is_valid_email(user_data['email']):
-            abort(400, "Invalid email format")
-
-        # 2. Email Uniqueness Check
-        existing_user = facade.get_user_by_email(user_data['email'])
-        if existing_user:
-            abort(400, "Email already registered")
+            return {'error': 'Invalid email format'}, 400
 
         try:
             new_user = facade.create_user(user_data)
-            return new_user, 201
-        except Exception as e:
-            abort(400, str(e))
+            return {
+                'id': new_user.id,
+                'first_name': new_user.first_name,
+                'last_name': new_user.last_name,
+                'email': new_user.email
+            }, 201
+        except ValueError as e:
+            return {'error': str(e)}, 400
 
 @api.route('/<user_id>')
-@api.param('user_id', 'The user identifier')
-@api.response(404, 'User not found')
 class UserResource(Resource):
     @api.marshal_with(user_model)
-    @api.response(200, 'User details retrieved')
+    @api.response(200, 'User details retrieved successfully')
+    @api.response(404, 'User not found')
     def get(self, user_id):
-        """Get user by ID - Score: 1.0"""
+        """Get user by ID"""
         user = facade.get_user(user_id)
         if not user:
             abort(404, "User not found")
         return user, 200
 
-    @api.expect(user_model, validate=True)
-    @api.marshal_with(user_model) # أضفتها هنا أيضاً لضمان نجاح الـ PUT
+    @api.expect(user_model)
+    @api.marshal_with(user_model)
     @api.response(200, 'User updated successfully')
-    @api.response(400, 'Invalid data')
+    @api.response(400, 'Invalid input data')
+    @api.response(404, 'User not found')
     def put(self, user_id):
-        """Update user - Score: 1.0"""
+        """Update user by ID"""
         user_data = api.payload
-
-        if 'email' in user_data and not is_valid_email(user_data['email']):
-            abort(400, "Invalid email format")
-
-        updated_user = facade.update_user(user_id, user_data)
-        if not updated_user:
-            abort(404, "User not found")
-        
-        return updated_user, 200
+        try:
+            updated_user = facade.update_user(user_id, user_data)
+            if not updated_user:
+                abort(404, "User not found")
+            return updated_user, 201
+        except ValueError as e:
+            abort(400, str(e))

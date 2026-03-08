@@ -1,7 +1,6 @@
-from app.models import BaseModel
+from app.models.base_model import BaseModel
 from app.models.place import Place
 from app.models.user import User
-
 
 class Review(BaseModel):
     def __init__(self, text, rating, place: Place, user: User):
@@ -36,3 +35,14 @@ class Review(BaseModel):
         if value is None or not (1 <= int(value) <= 5):
             raise ValueError("rating must be an integer between 1 and 5")
         self._rating = int(value)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "text": self.text,
+            "rating": self.rating,
+            "place_id": self.place.id,
+            "user_id": self.user.id,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat()
+        }
