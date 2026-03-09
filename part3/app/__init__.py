@@ -3,16 +3,19 @@ from flask_restx import Api
 from config import DevelopmentConfig   # import the class directly
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager
+from flask_sqlalchemy import SQLAlchemy
 
+db = SQLAlchemy()
 bcrypt = Bcrypt()
 jwt = JWTManager()
 
 def create_app(config_class=DevelopmentConfig):
     app = Flask(__name__)
-    bcrypt.init_app(app)
-    
+
     # Always load the config object (class)
     app.config.from_object(config_class)
+    db.init_app(app)
+    bcrypt.init_app(app)
 
     # Initialize JWT manager
     jwt.init_app(app)

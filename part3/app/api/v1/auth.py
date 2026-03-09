@@ -4,7 +4,6 @@ from flask_jwt_extended import (
     create_refresh_token,
     jwt_required,
     get_jwt_identity,
-    jwt_refresh_token_required,  # optional depending on flask-jwt-extended version
     get_jwt
 )
 from app.services import facade

@@ -1,103 +1,75 @@
 import uuid
-from app.services.Database.database import Base
-from sqlalchemy import Table, Column, String, ForeignKey, Float, Integer
-from sqlalchemy.orm import relationship
-from app.models import BaseModel
+from app import db
+from .basemodel import BaseModel
+from sqlalchemy.orm import validates
 
-place_amenity = Table(
+# Task 8: Association table for Many-to-Many using the shared db instance
+# This replaces the Table(..., Base.metadata, ...) approach
+place_amenity = db.Table(
     "place_amenity",
-    Base.metadata,
-    Column("place_id", String(36), ForeignKey("places.id"), primary_key=True),
-    Column("amenity_id", String(36), ForeignKey("amenities.id"), primary_key=True)
+    db.Column("place_id", db.String(36), db.ForeignKey("places.id"), primary_key=True),
+    db.Column("amenity_id", db.String(36), db.ForeignKey("amenities.id"), primary_key=True)
 )
 
-class Place(BaseModel, Base):
+class Place(BaseModel):
     __tablename__ = "places"
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-# SQLAlchemy Columns
-    _title = Column("title", String(100), nullable=False)
-    _description = Column("description", String(1024), nullable=True)
-    _price = Column("price", Float, nullable=False)
-    _latitude = Column("latitude", Float, nullable=False)
-    _longitude = Column("longitude", Float, nullable=False)
-    owner_id = Column(String(36), ForeignKey("users.id"), nullable=False)
 
-    reviews_rel = relationship("Review", back_populates="place", cascade="all, delete-orphan")
-    amenities_rel = relationship("Amenity", secondary=place_amenity, back_populates="places_rel")
+    # Columns using the db instance
+    title = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(1024), nullable=True)
+    price = db.Column(db.Float, nullable=False)
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    owner_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False)
 
-    def __init__(self, title, description, price, latitude, longitude, owner_id: str):
-        super().__init__()
-        self.title = title
-        self.description = description
-        self.price = price
-        self.latitude = latitude
-        self.longitude = longitude
-
-        if not owner_id:
-            raise ValueError("owner_id is required")
-        self.owner_id = str(owner_id)
-
-        self.reviews = []      # list of Review instances
-        self.amenities = []    # list of Amenity instances
-
-    @property
-    def title(self):
-        return self._title
-
-    @title.setter
-    def title(self, value):
+    # Task 8: Relationship Mapping
+    # Using strings ("Review", "Amenity") prevents early loading and circular imports
+    
+    reviews = db.relationship("Review", back_populates="place", cascade="all, delete-orphan")
+    amenities = db.relationship("Amenity", secondary=place_amenity, back_populates="places")
+    def __init__(self, title=None, description=None, price=0.0, latitude=0.0, longitude=0.0, owner_id=None, **kwargs):
+        """
+        Modified __init__ with default values to satisfy SQLAlchemy and test scripts
+        """
+        super().__init__(**kwargs)
+        if title:
+            self.title = title
+        if description:
+            self.description = description
+        if price is not None:
+            self.price = float(price)
+        if latitude is not None:
+            self.latitude = float(latitude)
+        if longitude is not None:
+            self.longitude = float(longitude)
+        if owner_id:
+            self.owner_id = owner_id
+    
+    # Validation logic using @validates instead of property setters for cleaner ORM behavior
+    @validates('title')
+    def validate_title(self, key, value):
         if not value or len(value) > 100:
             raise ValueError("title is required and must be <= 100 characters")
-        self._title = value
-        
-    @property
-    def description(self):
-        return self._description
+        return value
 
-    @description.setter
-    def description(self, value):
-        self._description = value
-
-    @property
-    def price(self):
-        return self._price
-
-    @price.setter
-    def price(self, value):
-        if value is None or value < 0:
+    @validates('price')
+    def validate_price(self, key, value):
+        if value is None or float(value) < 0:
             raise ValueError("price must be a positive value")
-        self._price = float(value)
+        return float(value)
 
-    @property
-    def latitude(self):
-        return self._latitude
-
-    @latitude.setter
-    def latitude(self, value):
-        if value is None or value < -90.0 or value > 90.0:
+    @validates('latitude')
+    def validate_latitude(self, key, value):
+        if value is None or not (-90.0 <= float(value) <= 90.0):
             raise ValueError("latitude must be between -90.0 and 90.0")
-        self._latitude = float(value)
+        return float(value)
 
-    @property
-    def longitude(self):
-        return self._longitude
-
-    @latitude.setter
-    def latitude(self, value):
-        if value is None or value < -90.0 or value > 90.0:
-            raise ValueError("latitude must be between -90.0 and 90.0")
-        self._latitude = float(value)
-
-    @property
-    def longitude(self):
-        return self._longitude
-
-    @longitude.setter
-    def longitude(self, value):
-        if value is None or value < -180.0 or value > 180.0:
+    @validates('longitude')
+    def validate_longitude(self, key, value):
+        if value is None or not (-180.0 <= float(value) <= 180.0):
             raise ValueError("longitude must be between -180.0 and 180.0")
-        self._longitude = float(value)
-    
+        return float(value)
+
     def to_dict(self):
         return {
             'id': str(self.id),
@@ -107,16 +79,7 @@ class Place(BaseModel, Base):
             'latitude': self.latitude,
             'longitude': self.longitude,
             'owner_id': str(self.owner_id),
-            # Use reviews_rel if DB is active, otherwise fallback to your self.reviews
-            'amenities': [str(a.id) for a in (self.amenities_rel if self.amenities_rel else self.amenities)],
-            'created_at': self.created_at.isoformat() if getattr(self, 'created_at', None) else None,
-            'updated_at': self.updated_at.isoformat() if getattr(self, 'updated_at', None) else None
-        } 
-
-
-from app.models.review import Review
-Review.place = relationship("Place", back_populates="reviews_rel")
-
-from app.models.amenity import Amenity
-Amenity.places_rel = relationship("Place", secondary=place_amenity, back_populates="amenities_rel")
-        
+            'amenities': [a.id for a in self.amenities],
+            'created_at': self.created_at.isoformat() if hasattr(self, 'created_at') and self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if hasattr(self, 'updated_at') and self.updated_at else None
+        }

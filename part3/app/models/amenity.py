@@ -1,30 +1,30 @@
 import uuid
-from sqlalchemy import Column, String
-from sqlalchemy.orm import relationship
-from app.services.Database.database import Base
+from app import db
+from sqlalchemy.orm import  validates
 from app.models import BaseModel
 
-class Amenity(BaseModel, Base):
+class Amenity(BaseModel):
     __tablename__ = "amenities"
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = Column(String(50), nullable=False)
-    places_rel = relationship("Place", secondary="place_amenity", back_populates="amenities_rel")
 
+    name = db.Column(db.String(50), nullable=False)
+    
+    places = db.relationship('Place', secondary='place_amenity', back_populates='amenities')
+    
     def __init__(self, name, **kwargs):
         """
-        Initialize Amenity entity for Part 2
+        Initialize Amenity entity
         """
         super().__init__(**kwargs)
-        self.name = self.validate_name(name)
+        self.name =name
 
-    @staticmethod
-    def validate_name(name):
+    @validates('name')
+    def validate_name(self, key, value):
         """Ensure name is valid and not empty"""
-        if not name or len(name.strip()) == 0:
+        if not value or len(value.strip()) == 0:
             raise ValueError("Amenity name cannot be empty")
-        if len(name) > 50:
+        if len(value) > 50:
             raise ValueError("Amenity name must be under 50 characters")
-        return name
+        return value
 
     def to_dict(self):
         """
