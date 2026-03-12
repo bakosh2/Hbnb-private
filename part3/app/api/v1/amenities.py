@@ -1,4 +1,5 @@
 from flask_restx import Namespace, Resource, fields, abort
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.services import facade
 
 # Define the namespace for Amenity operations
@@ -25,20 +26,26 @@ class AmenityList(Resource):
         """Retrieve a list of all amenities"""
         return facade.get_all_amenities(), 200
 
+    @jwt_required()
     @api.expect(amenity_model, validate=True)
     @api.marshal_with(amenity_response_model)
     @api.response(201, 'Amenity successfully created')
     @api.response(400, 'Invalid input data')
+    @api.response(403, 'Forbidden')
     def post(self):
         """Create a new amenity"""
+        user_id = get_jwt_identity()
+
+        # Only allow admins to create global amenities (adjust policy as needed)
+        if not facade.user_is_admin(user_id):
+            abort(403, "Only administrators can create amenities")
+
         amenity_data = api.payload
-        
+
         try:
-            new_amenity = facade.create_amenity(amenity_data)
-            # facade.create_amenity should return the created object
+            new_amenity = facade.create_amenity(amenity_data, created_by=user_id)
             return new_amenity, 201
         except Exception as e:
-            # Captures business logic errors and returns 400
             abort(400, str(e))
 
 @api.route('/<amenity_id>')
@@ -51,21 +58,32 @@ class AmenityResource(Resource):
         """Get amenity details by ID"""
         amenity = facade.get_amenity(amenity_id)
         if not amenity:
-            # Required for Score: 1.0 on "Amenity Retrieval with Invalid ID"
             abort(404, "Amenity not found")
         return amenity, 200
 
+    @jwt_required()
     @api.expect(amenity_model, validate=True)
     @api.marshal_with(amenity_response_model)
     @api.response(200, 'Amenity updated successfully')
     @api.response(400, 'Invalid input data')
+    @api.response(403, 'Forbidden')
     def put(self, amenity_id):
         """Update an amenity's information"""
-        amenity_data = api.payload
-        
-        updated_amenity = facade.update_amenity(amenity_id, amenity_data)
-        if not updated_amenity:
-            # Required for Score: 1.0 on "Amenity Update with Invalid ID"
+        user_id = get_jwt_identity()
+
+        # Ensure amenity exists
+        existing = facade.get_amenity(amenity_id)
+        if not existing:
             abort(404, "Amenity not found")
-            
+
+        # Allow update only if user is admin or the owner of the amenity
+        if not (facade.user_is_admin(user_id) or facade.user_owns_amenity(user_id, amenity_id)):
+            abort(403, "You do not have permission to update this amenity")
+
+        amenity_data = api.payload
+
+        updated_amenity = facade.update_amenity(amenity_id, amenity_data, updated_by=user_id)
+        if not updated_amenity:
+            abort(404, "Amenity not found")
+
         return updated_amenity, 200
