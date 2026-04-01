@@ -1,6 +1,6 @@
 import uuid
 from app import db
-from .basemodel import BaseModel
+from .base_model import BaseModel
 from sqlalchemy.orm import validates
 
 # Task 8: Association table for Many-to-Many using the shared db instance

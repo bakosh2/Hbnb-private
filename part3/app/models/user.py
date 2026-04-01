@@ -1,7 +1,7 @@
 import uuid
 import re
 from app import db, bcrypt
-from .basemodel import BaseModel
+from .base_model import BaseModel
 from sqlalchemy.orm import validates
 
 class User(BaseModel):

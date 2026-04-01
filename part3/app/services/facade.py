@@ -1,35 +1,75 @@
-from app.models.user import User
-from app.models.amenity import Amenity
-from app.models.place import Place
-from app.models.review import Review
-from app.persistence.repository import InMemoryRepository
+from app.persistence.repository import SQLAlchemyRepository
+
+
+class UserRepository(SQLAlchemyRepository):
+    def __init__(self):
+        from app.models.user import User
+        super().__init__(User)
+
+    def get_user_by_email(self, email):
+        return self.model.query.filter_by(email=email).first()
+
+
+class AmenityRepository(SQLAlchemyRepository):
+    def __init__(self):
+        from app.models.amenity import Amenity
+        super().__init__(Amenity)
+
+
+class PlaceRepository(SQLAlchemyRepository):
+    def __init__(self):
+        from app.models.place import Place
+        super().__init__(Place)
+
+
+class ReviewRepository(SQLAlchemyRepository):
+    def __init__(self):
+        from app.models.review import Review
+        super().__init__(Review)
+
+    def get_by_user_and_place(self, user_id, place_id):
+        return self.model.query.filter_by(
+            user_id=str(user_id), place_id=str(place_id)
+        ).first()
+
+    def get_by_place(self, place_id):
+        return self.model.query.filter_by(place_id=str(place_id)).all()
 
 
 class HBnBFacade:
     """
     Facade pattern: single entry point for all business logic.
-    The Presentation layer talks only to this class.
+    Uses SQLAlchemy repositories for persistent storage.
     """
 
     def __init__(self):
-        self.user_repo = InMemoryRepository()
-        self.amenity_repo = InMemoryRepository()
-        self.place_repo = InMemoryRepository()
-        self.review_repo = InMemoryRepository()
+        self.user_repo = UserRepository()
+        self.amenity_repo = AmenityRepository()
+        self.place_repo = PlaceRepository()
+        self.review_repo = ReviewRepository()
 
     # ------------------------------------------------------------------ #
-    #  User                                                              #
+    #  User                                                               #
     # ------------------------------------------------------------------ #
 
     def create_user(self, user_data):
+        from app.models.user import User
+        import re
+
+        email = user_data.get('email', '')
+        if not re.match(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$', email):
+            raise ValueError("Invalid email format")
+
+        if self.user_repo.get_user_by_email(email):
+            raise ValueError("Email already registered")
+
         user = User(
             first_name=user_data.get('first_name', ''),
             last_name=user_data.get('last_name', ''),
-            email=user_data.get('email', ''),
-            password='',          # placeholder; will be hashed below
+            email=email,
+            password=user_data.get('password', ''),
             is_admin=user_data.get('is_admin', False)
         )
-        user.hash_password(user_data.get('password', ''))
         self.user_repo.add(user)
         return user
 
@@ -37,23 +77,34 @@ class HBnBFacade:
         return self.user_repo.get(user_id)
 
     def get_user_by_email(self, email):
-        return self.user_repo.get_by_attribute('email', email)
+        return self.user_repo.get_user_by_email(email)
 
     def get_all_users(self):
         return self.user_repo.get_all()
 
     def update_user(self, user_id, user_data):
+        import re
         user = self.user_repo.get(user_id)
         if not user:
             return None
+        if 'email' in user_data:
+            if not re.match(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$',
+                            user_data['email']):
+                raise ValueError("Invalid email format")
         user.update(user_data)
+        self.user_repo.db.session.commit()
         return user
 
+    def user_is_admin(self, user_id):
+        user = self.user_repo.get(user_id)
+        return bool(user and getattr(user, 'is_admin', False))
+
     # ------------------------------------------------------------------ #
-    #  Amenity                                                           #
+    #  Amenity                                                            #
     # ------------------------------------------------------------------ #
 
-    def create_amenity(self, amenity_data):
+    def create_amenity(self, amenity_data, created_by=None):
+        from app.models.amenity import Amenity
         name = amenity_data.get('name', '').strip()
         if not name:
             raise ValueError("Amenity name is required")
@@ -67,18 +118,24 @@ class HBnBFacade:
     def get_all_amenities(self):
         return self.amenity_repo.get_all()
 
-    def update_amenity(self, amenity_id, amenity_data):
+    def update_amenity(self, amenity_id, amenity_data, updated_by=None):
         amenity = self.amenity_repo.get(amenity_id)
         if not amenity:
             return None
         amenity.update(amenity_data)
+        self.amenity_repo.db.session.commit()
         return amenity
 
+    def user_owns_amenity(self, user_id, amenity_id):
+        # Amenities are global; only admins manage them
+        return False
+
     # ------------------------------------------------------------------ #
-    #  Place                                                             #
+    #  Place                                                              #
     # ------------------------------------------------------------------ #
 
     def create_place(self, place_data):
+        from app.models.place import Place
         owner_id = place_data.get('owner_id', '')
         if not self.user_repo.get(owner_id):
             raise ValueError("Owner not found")
@@ -87,11 +144,11 @@ class HBnBFacade:
         latitude = place_data.get('latitude', 0.0)
         longitude = place_data.get('longitude', 0.0)
 
-        if price < 0:
+        if float(price) < 0:
             raise ValueError("Price must be non-negative")
-        if not (-90.0 <= latitude <= 90.0):
+        if not (-90.0 <= float(latitude) <= 90.0):
             raise ValueError("Latitude must be between -90 and 90")
-        if not (-180.0 <= longitude <= 180.0):
+        if not (-180.0 <= float(longitude) <= 180.0):
             raise ValueError("Longitude must be between -180 and 180")
 
         place = Place(
@@ -103,7 +160,6 @@ class HBnBFacade:
             owner_id=owner_id
         )
 
-        # Validate amenities
         for aid in place_data.get('amenities', []):
             amenity = self.amenity_repo.get(aid)
             if not amenity:
@@ -125,15 +181,13 @@ class HBnBFacade:
         if not place:
             return None
 
-        # Validate numeric fields
-        if 'price' in place_data and place_data['price'] < 0:
+        if 'price' in place_data and float(place_data['price']) < 0:
             raise ValueError("Price must be non-negative")
-        if 'latitude' in place_data and not (-90.0 <= place_data['latitude'] <= 90.0):
+        if 'latitude' in place_data and not (-90.0 <= float(place_data['latitude']) <= 90.0):
             raise ValueError("Latitude must be between -90 and 90")
-        if 'longitude' in place_data and not (-180.0 <= place_data['longitude'] <= 180.0):
+        if 'longitude' in place_data and not (-180.0 <= float(place_data['longitude']) <= 180.0):
             raise ValueError("Longitude must be between -180 and 180")
 
-        # Validate amenities
         if 'amenities' in place_data:
             amenity_ids = place_data.pop('amenities')
             place.amenities = []
@@ -144,13 +198,15 @@ class HBnBFacade:
                 place.amenities.append(amenity)
 
         place.update(place_data)
+        self.place_repo.db.session.commit()
         return place
 
     # ------------------------------------------------------------------ #
-    #  Review                                                            #
+    #  Review                                                             #
     # ------------------------------------------------------------------ #
 
     def create_review(self, review_data):
+        from app.models.review import Review
         user_id = review_data.get('user_id', '')
         place_id = review_data.get('place_id', '')
         text = review_data.get('text', '').strip()
@@ -167,11 +223,6 @@ class HBnBFacade:
 
         review = Review(text=text, rating=rating, place_id=place_id, user_id=user_id)
         self.review_repo.add(review)
-
-        place = self.place_repo.get(place_id)
-        if place:
-            place.reviews.append(review)
-
         return review
 
     def get_review(self, review_id):
@@ -181,47 +232,31 @@ class HBnBFacade:
         return self.review_repo.get_all()
 
     def get_reviews_by_place(self, place_id):
-        return [r for r in self.review_repo.get_all() if r.place_id == place_id]
+        return self.review_repo.get_by_place(place_id)
 
     def get_review_by_user_and_place(self, user_id, place_id):
-        """
-        Return a review created by `user_id` for `place_id`, or None if not found.
-        Used to enforce "one review per user per place" at the API/service level.
-        """
-        for r in self.review_repo.get_all():
-            if str(getattr(r, 'user_id', None)) == str(user_id) and str(getattr(r, 'place_id', None)) == str(place_id):
-                return r
-        return None
+        return self.review_repo.get_by_user_and_place(user_id, place_id)
 
     def update_review(self, review_id, review_data):
         review = self.review_repo.get(review_id)
         if not review:
             return None
 
-        # Validate text
-        if 'text' in review_data:
-            if not review_data['text'] or not str(review_data['text']).strip():
-                raise ValueError("text is required")
-
-        # Validate rating
+        if 'text' in review_data and not str(review_data['text']).strip():
+            raise ValueError("text is required")
         if 'rating' in review_data:
             rating = review_data['rating']
             if not isinstance(rating, int) or not (1 <= rating <= 5):
                 raise ValueError("Rating must be an integer between 1 and 5")
 
-        # Only allow updating text and rating
         allowed = {k: v for k, v in review_data.items() if k in ('text', 'rating')}
         review.update(allowed)
+        self.review_repo.db.session.commit()
         return review
 
     def delete_review(self, review_id):
         review = self.review_repo.get(review_id)
         if not review:
             return False
-
-        place = self.place_repo.get(review.place_id)
-        if place:
-            place.reviews = [r for r in place.reviews if r.id != review_id]
-
         self.review_repo.delete(review_id)
         return True

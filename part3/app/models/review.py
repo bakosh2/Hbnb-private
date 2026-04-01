@@ -1,6 +1,6 @@
 import uuid
 from app import db
-from .basemodel import BaseModel
+from .base_model import BaseModel
 from sqlalchemy.orm import validates
 
 class Review(BaseModel):
