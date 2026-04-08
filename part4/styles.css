@@ -1,42 +1,132 @@
+
+:root {
+    --apple-green: #8db600; 
+    --light-grey: #f4f4f4;
+    --border-color: #ddd;
+}
+
 body {
-  font-family: Arial, sans-serif;
-  margin: 0;
-  padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background-color: #fafafa;
 }
 
-header, footer {
-  background: #333;
-  color: white;
-  padding: 10px;
-  text-align: center;
-}
 
-nav a {
-  margin: 0 10px;
-  color: white;
-  text-decoration: none;
+header {
+    background-color: var(--apple-green);
+    color: white;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
 .logo {
-  width: 50px;
+    width: 50px; 
+    filter: brightness(0) invert(1); /* يجعل اللوجو أبيض ليناسب الخلفية الخضراء */
 }
+
+nav a {
+    margin: 0 15px;
+    color: white;
+    text-decoration: none;
+    font-weight: bold;
+}
+
 
 .login-button {
-  color: white;
+    background-color: white;
+    color: var(--apple-green) !important;
+    padding: 8px 20px;
+    border-radius: 20px;
+    text-decoration: none;
+    transition: 0.3s;
 }
+
+.login-button:hover {
+    background-color: var(--light-grey);
+}
+
 
 .place-card, .review-card {
-  margin: 20px;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 10px;
+    margin: 20px;         
+    padding: 10px;       
+    border: 1px solid var(--border-color); 
+    border-radius: 10px;  
+    background-color: white;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
 }
 
-button {
-  padding: 5px 10px;
-  cursor: pointer;
+
+.details-button {
+    background-color: var(--apple-green);
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 10px;
 }
 
-form {
-  margin: 20px;
+.details-button:hover {
+    background-color: var(--dark-green);
+}
+
+
+footer {
+    background-color: var(--apple-green);
+    color: white;
+    padding: 15px;
+    text-align: center;
+    margin-top: auto;
+}
+
+
+.places-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 15px;
+    padding: 20px;
+}
+
+
+.form {
+    max-width: 400px;
+    margin: 40px auto;
+    padding: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: white;
+}
+
+.form input {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    box-sizing: border-box;
+}
+
+#filters {
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-bottom: 2px solid #8db600; /* خط تفاحي تحت الفلتر */
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+}
+
+#price-filter {
+    padding: 8px;
+    border-radius: 5px;
+    border: 1px solid #8db600;
+    cursor: pointer;
 }
