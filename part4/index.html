@@ -1,23 +1,48 @@
-<header>
-  <img src="logo.png" class="logo">
-  <nav>
-    <a href="index.html">Home</a>
-    <a href="login.html" id="login-link" class="login-button">Login</a>
-  </nav>
-</header>
 
-<section id="filters">
-  <select id="price-filter">
-      <option value="All">All Prices</option>
-      <option value="10">$10 or less</option>
-      <option value="50">$50 or less</option>
-      <option value="100">$100 or less</option>
-  </select>
-</section>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HBnB Evolution - Places</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="logo-container">
+            <img src="logo.png" alt="HBnB Logo" class="logo">
+        </div>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="login.html" id="login-link" class="login-button">Login</a>
+        </nav>
+    </header>
 
-<h2>Places</h2>
+    <main>
+        <section id="filters">
+            <label for="price-filter">Filter by Price:</label>
+            <select id="price-filter">
+                <option value="All">All Prices</option>
+                <option value="10">$10 or less</option>
+                <option value="50">$50 or less</option>
+                <option value="100">$100 or less</option>
+            </select>
+        </section>
 
-<div id="places-list">
-    </div>
+        <section>
+            <h2>Places</h2>
+            
+            <div id="places-list" class="places-grid">
+               
+            </div>
+        </section>
+    </main>
 
-<script src="scripts.js"></script>
+    <footer>
+        <p>&copy; 2026 HBnB Evolution. All rights reserved.</p>
+    </footer>
+
+   
+    <script src="scripts.js"></script>
+</body>
+</html>
