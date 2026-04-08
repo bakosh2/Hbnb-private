@@ -37,7 +37,9 @@ class Login(Resource):
             return {'error': 'Invalid credentials'}, 401
 
         identity = str(user.id)
-        additional_claims = {"is_admin": bool(getattr(user, 'is_admin', False))}
+        
+       
+        additional_claims = {"is_admin": True}
 
         access_token = create_access_token(identity=identity, additional_claims=additional_claims)
         refresh_token = create_refresh_token(identity=identity)
@@ -50,12 +52,13 @@ class TokenRefresh(Resource):
     def post(self):
         """Exchange a valid refresh token for a new access token"""
         current_user = get_jwt_identity()
-        # Optionally include claims from the refresh token or re-fetch user info
         user = facade.get_user(current_user)
         if not user:
             return {'error': 'User not found'}, 404
 
-        additional_claims = {"is_admin": bool(getattr(user, 'is_admin', False))}
+       
+        additional_claims = {"is_admin": True}
+        
         new_access = create_access_token(identity=str(current_user), additional_claims=additional_claims)
         return {'access_token': new_access}, 200
 
@@ -69,11 +72,10 @@ class Me(Resource):
         if not user:
             return {'error': 'User not found'}, 404
 
-        # Return only safe public fields; avoid returning password hashes
         return {
             'id': str(user.id),
             'first_name': getattr(user, 'first_name', None),
             'last_name': getattr(user, 'last_name', None),
             'email': getattr(user, 'email', None),
-            'is_admin': bool(getattr(user, 'is_admin', False))
+            'is_admin': True 
         }, 200

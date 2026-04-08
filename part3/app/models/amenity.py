@@ -1,7 +1,7 @@
 import uuid
 from app import db
 from sqlalchemy.orm import  validates
-from .base_model import BaseModel
+from .basemodel import BaseModel
 
 class Amenity(BaseModel):
     __tablename__ = "amenities"
