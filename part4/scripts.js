@@ -167,6 +167,8 @@ function checkAuthentication() {
     const token = getCookie('token');
     if (token) {
         fetchPlaces(token); 
+    } else {
+        window.location.href = 'login.html';
     }
 }
 
