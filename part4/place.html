@@ -1,34 +1,49 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Place Details</title>
-  <link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Place Details - HBnB</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
 <header>
-  <img src="logo.png" class="logo">
-  <nav>
-    <a href="index.html">Home</a>
-    <a href="login.html" id="login-link" class="login-button">Login</a>
-  </nav>
+    
+    <img src="logo.png" class="logo" alt="HBnB Logo">
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="login.html" id="login-link" class="login-button">Login</a>
+    </nav>
 </header>
 
-<div id="place-details" class="place-details">
-  <div class="place-info">
-    <h2>Loading...</h2>
-  </div>
-</div>
+<main>
+    
+    <section id="place-details" class="place-details">
+        <div class="place-info">
+            <h2>Loading details...</h2>
+        </div>
+    </section>
 
-<section id="add-review">
-  <a href="add_review.html">
-    <button>Add Review</button>
-  </a>
-</section>
+   
+    <section id="reviews-section" style="padding: 20px;">
+        <h3>Reviews</h3>
+        <div id="reviews-list">
+           
+        </div>
+    </section>
+
+
+    <section id="add-review" style="display: none; padding: 20px;">
+        <a href="add_review.html">
+            <button class="details-button">Add Review</button>
+        </a>
+    </section>
+</main>
 
 <footer>
-  <p>All rights reserved</p>
+    <p>© 2026 HBnB Evolution. All rights reserved.</p>
 </footer>
 
 <script src="scripts.js"></script>
